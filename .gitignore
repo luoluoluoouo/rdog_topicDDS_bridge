@@ -5,4 +5,7 @@ reddog_ros2control/
 reddog_ros2_ws/build/
 reddog_ros2_ws/log/
 reddog_ros2_ws/install/
-*/__pycache__
+__pycache__/
+*.pyc
+.vscode/
+.venv/
