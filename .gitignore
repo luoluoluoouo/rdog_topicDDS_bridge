@@ -1,0 +1,7 @@
+unitree_sdk2_python/
+unitree_sdk2/
+unitree_mujoco/
+reddog_ros2control/
+reddog_ros2_ws/build/
+reddog_ros2_ws/log/
+reddog_ros2_ws/install/
