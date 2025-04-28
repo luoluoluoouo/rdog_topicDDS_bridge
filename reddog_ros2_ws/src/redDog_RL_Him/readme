@@ -1,4 +1,7 @@
 python3 Motor_Manager_origin.py
+            position = [[     3 ,    -3,   -3,     3 ], 
+                        [  -1.6 ,   1.6,  1.6,  -1.6 ], 
+                        [     0 ,     0,    0,     0]] 
 
 Port
 start/setup_ports.sh

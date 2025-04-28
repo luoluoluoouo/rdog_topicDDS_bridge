@@ -1,6 +1,15 @@
-import time
 import sys
+import time
+import threading
+import traceback
 import numpy as np
+
+import rclpy
+from rclpy.node import Node
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float32MultiArray
+from geometry_msgs.msg import QuaternionStamped
+from geometry_msgs.msg import Vector3Stamped
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
 from unitree_sdk2py.core.channel import ChannelFactoryInitialize
@@ -8,11 +17,6 @@ from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
 from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowState_
 from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.utils.crc import CRC
-
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import JointState
-from std_msgs.msg import Float32MultiArray
 
 
 stand_up_joint_pos = np.array([
@@ -34,24 +38,24 @@ crc = CRC()
 class JointStatePub(Node):
     def __init__(self):
         super().__init__('topicddsbridge_jointst_pub')
-        self.subscription = self.create_publisher(
+        self.publisher = self.create_publisher(
             JointState,
             'joint_states',
             10
         )
 
-class PIDGainPub():
+class PIDGainPub(Node):
     def __init__(self):
         super().__init__('topicddsbridge_pidgain_pub')
-        self.subscription = self.create_publisher(
+        self.publisher = self.create_publisher(
             Float32MultiArray,
             'pid_gain',
             10
         )
 
-class JointStateSub():
+class JointStateSub(Node):
     def __init__(self):
-        super().__init__('topicddsbridge_jointst_pub')
+        super().__init__('topicddsbridge_jointst_sub')
         self.subscription = self.create_subscription(
             JointState,
             '/low_level_info/joint_states',
@@ -87,8 +91,69 @@ class JointStateSub():
     
         return self.dof_pos, self.dof_vel
 
+class LinarASub(Node):
+    def __init__(self):
+        super().__init__('Imu_linear_acceleration_subscriber')
+        self.subscription = self.create_subscription(
+            Vector3Stamped,
+            '/imu/acceleration_hr',
+            self.joint_state_callback,
+            10
+        )
+        self.get_logger().info('Subscribed to linear acceleration topic.')
+        self.linear_acceleration = None
+
+    def joint_state_callback(self, msg):
+        self.linear_acceleration = msg.vector
+        # self.get_logger().info(f"Received linear acceleration: x={msg.vector.x}, y={msg.vector.y}, z={msg.vector.z}")
+
+    def get_Imu_data(self):
+        return self.linear_acceleration
+
+class AngularVSub(Node):
+    def __init__(self):
+        super().__init__('Imu_angular_velocity_subscriber')
+        self.subscription = self.create_subscription(
+            Vector3Stamped,
+            '/imu/angular_velocity_hr',
+            self.joint_state_callback,
+            10
+        )
+        self.get_logger().info('Subscribed to angular velocity topic.')
+        self.angular_velocity = None
+
+    def joint_state_callback(self, msg):
+        self.angular_velocity = msg.vector
+        # self.get_logger().info(f"Received angular velocity: x={msg.vector.x}, y={msg.vector.y}, z={msg.vector.z}")
+
+    def get_Imu_data(self):
+        return self.angular_velocity
+
+class QuaternionSub(Node):
+    def __init__(self):
+        super().__init__('Imu_quaternion_subscriber')
+        self.subscription = self.create_subscription(
+            QuaternionStamped,
+            '/filter/quaternion',
+            self.joint_state_callback,
+            10
+        )
+        self.get_logger().info('Subscribed to quaternion topic.')
+        self.quaternion = None
+
+    def joint_state_callback(self, msg):
+        self.quaternion = msg.quaternion
+
+    def get_Imu_data(self):
+        return self.quaternion
+
 class DDSHandler:
     def __init__(self, ether_name: str=""):
+        # self.jointStateSub = JointStateSub()
+
+        # self.pidGainPub = PIDGainPub()
+        # self.jointStatePub = JointStatePub() 
+
         self.pub = None
         self.low_state = None
         self.pub = ChannelPublisher("rt/lowstate", LowState_)
@@ -99,52 +164,41 @@ class DDSHandler:
         self.sub = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.sub.Init(self.LowCmdMessageHandler, 10) 
 
-        self.keys = ['frh', 'fru', 'frd', 
-                     'flh', 'flu', 'fld', 
-                     'rrh', 'rru', 'rrd', 
-                     'rlh', 'rlu', 'rld']
+
+        self.joint_state_msg = JointState()
+        self.joint_state_msg.name = [
+            'flh', 'frh', 'rlh', 'rrh',   # Hips
+            'flu', 'fru', 'rlu', 'rru',  # Upper legs
+            'fld', 'frd', 'rld', 'rrd'   # Lower legs
+        ]
+        self.pid_gain_msg = Float32MultiArray()
+        self.pid_gain_msg.data = [float(0), float(0)]
+
 
     def LowCmdMessageHandler(self, msg: LowCmd_):
         self.low_cmd = msg
         if self.low_cmd is not None:
-            # Initialize motor state lists
-            self.q = []
-            self.dq = []
-            self.tau = []
-            self.kp = []
-            self.kd = []
-            
+            # print(self.low_cmd.motor_cmd)
+            self.joint_state_msg.position = []
+            self.joint_state_msg.velocity = []
+            self.joint_state_msg.effort = []
             i = 0
-            # Parse motor commands and store relevant information for each motor
             for motor_cmd in self.low_cmd.motor_cmd:
                 if i < 12:
-                    self.q.append(motor_cmd.q)
-                    self.dq.append(motor_cmd.dq)
-                    self.tau.append(motor_cmd.tau)
-                    self.kp.append(motor_cmd.kp)
-                    self.kd.append(motor_cmd.kd)
+                    self.joint_state_msg.position.append(motor_cmd.q)
+                    self.joint_state_msg.velocity.append(motor_cmd.dq)
+                    self.joint_state_msg.effort.append(motor_cmd.tau)
+                    self.pid_gain_msg.data[0] = motor_cmd.kp
+                    self.pid_gain_msg.data[1] = motor_cmd.kd
                     i += 1
                 else:
                     break
-
-            print(self.q)
         
-
-if __name__ == '__main__':
-
-    if len(sys.argv) <2:
-        ChannelFactoryInitialize(1, "lo")
-        ch = Go2Channel()
-    else:
-        ChannelFactoryInitialize(0, sys.argv[1])
-        ch = Go2Channel(sys.argv[1])
-
+def stand_up():
+    runing_time = 0
     # Create a publisher to publish the data defined in UserData class
     pub = ChannelPublisher("rt/lowcmd", LowCmd_)
     pub.Init()
-
-    #TODO
-    # ch = Go2Channel("hi")
     
 
     cmd = unitree_go_msg_dds__LowCmd_()
@@ -197,6 +251,75 @@ if __name__ == '__main__':
         time_until_next_step = dt - (time.perf_counter() - step_start)
         if time_until_next_step > 0:
             time.sleep(time_until_next_step)
+
+class Controller:
+    def __init__(self):
+        if len(sys.argv) <2:
+            ChannelFactoryInitialize(1, "lo")
+            self.dds_handler = DDSHandler()
+        else:
+            ChannelFactoryInitialize(0, sys.argv[1])
+            self.dds_handler = DDSHandler(sys.argv[1])
+
+        rclpy.init()
+        self.jointStateSub = JointStateSub()
+        self.linearASub = LinarASub()
+        self.angularVSub = AngularVSub()
+        self.quaternionSub = QuaternionSub()
+        self.jointStatePub = JointStatePub()
+        self.pidGainPub = PIDGainPub()
+        
+
+        self.executor = rclpy.executors.SingleThreadedExecutor()
+        self.executor.add_node(self.jointStateSub)
+        self.executor.add_node(self.angularVSub)
+        self.executor.add_node(self.linearASub)
+        self.executor.add_node(self.quaternionSub)
+        self.executor.add_node(self.jointStatePub)
+        self.executor.add_node(self.pidGainPub)
+        self.spin_thread = threading.Thread(target=self.executor.spin, daemon=True)
+        self.spin_thread.start()
+
+        time.sleep(1)
+
+    def low_cmd2topic(self):
+        joint_state_msg = self.dds_handler.joint_state_msg
+        pid_gain_msg = self.dds_handler.pid_gain_msg
+
+        self.jointStatePub.publisher.publish(joint_state_msg)
+        self.pidGainPub.publisher.publish(pid_gain_msg)
+
+    def topic2low_state(self):
+        joint_state = self.jointStateSub.get_jointAngle_data()
+
+        orientation = self.quaternionSub.get_Imu_data()
+        linear_acceleration = self.linearASub.get_Imu_data()
+        angular_velocity = self.angularVSub.get_Imu_data()
+
+        #TODO: Add the logic to process the data and send it to the robot
+
+
+if __name__ == '__main__':
+    controller = Controller()
+
+    cmd_dict = {
+        "read": 0
+    }
+
+    start_time = time.perf_counter()
+    now_time = time.perf_counter()
+    while (now_time - start_time) < 20:
+        now_time = time.perf_counter()
+        # print(controller.quaternionSub.get_Imu_data())
+        controller.low_cmd2topic()
+        # print("Quaternion: ", quaternionSub.get_Imu_data())
+        # print("Linear Acceleration: ", linearASub.get_Imu_data())
+        # print("Angular Velocity: ", angularVSub.get_Imu_data())
+        # print(jointStateSub.get_jointAngle_data())
+        # print(dds_handler.pid_gain_msg)
+
+
+
 
 # /low_level_info/joint_states
 # ---
@@ -292,5 +415,15 @@ if __name__ == '__main__':
 # - -1.5072613954544067
 # velocity: []
 # effort: []
+
+# sensor_msgs.msg.JointState(
+#     header=std_msgs.msg.Header(stamp=builtin_interfaces.msg.Time(sec=0, nanosec=0), frame_id=''), 
+#     name=['flh', 'frh', 'rlh', 'rrh', 'flu', 'fru', 'rlu', 'rru', 'fld', 'frd', 'rld', 'rrd'], 
+#     position=[0.04729447141289711, 1.221118450164795, -2.442246913909912, 
+#               -0.04729447141289711, 1.221118450164795, -2.442246913909912, 
+#               0.04729447141289711, 1.221118450164795, -2.442246913909912, 
+#               -0.04729447141289711, 1.221118450164795, -2.442246913909912], 
+#               velocity=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
+#               effort=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
 
