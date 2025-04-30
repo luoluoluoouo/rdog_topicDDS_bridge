@@ -79,17 +79,23 @@ class JointStateSub(Node):
             self.jointVelocity_data[name] = velocities[i]
 
     def get_jointAngle_data(self):
-        self.dof_pos = [self.jointAngle_data['flh'],  self.jointAngle_data['flu'],  self.jointAngle_data['fld'],  
-                        self.jointAngle_data['frh'],  - self.jointAngle_data['fru'],  - self.jointAngle_data['frd'], 
-                        -self.jointAngle_data['rlh'],  self.jointAngle_data['rlu'],  self.jointAngle_data['rld'],    
-                        -self.jointAngle_data['rrh'],  - self.jointAngle_data['rru'],  - self.jointAngle_data['rrd']]
-    
-        self.dof_vel = [self.jointVelocity_data['flh'],  self.jointVelocity_data['flu'],  self.jointVelocity_data['fld'],  
-                        self.jointVelocity_data['frh'],  - self.jointVelocity_data['fru'],  - self.jointVelocity_data['frd'], 
-                        -self.jointVelocity_data['rlh'],  self.jointVelocity_data['rlu'],  self.jointVelocity_data['rld'],    
-                        -self.jointVelocity_data['rrh'],  - self.jointVelocity_data['rru'],  - self.jointVelocity_data['rrd']]
-    
+        # determine the joint position and velocity is not empty dict
+        if bool(self.jointAngle_data) and bool(self.jointVelocity_data):
+            self.dof_pos = [self.jointAngle_data['flh'],  self.jointAngle_data['flu'],  self.jointAngle_data['fld'],  
+                            self.jointAngle_data['frh'],  - self.jointAngle_data['fru'],  - self.jointAngle_data['frd'], 
+                            -self.jointAngle_data['rlh'],  self.jointAngle_data['rlu'],  self.jointAngle_data['rld'],    
+                            -self.jointAngle_data['rrh'],  - self.jointAngle_data['rru'],  - self.jointAngle_data['rrd']]
+        
+            self.dof_vel = [self.jointVelocity_data['flh'],  self.jointVelocity_data['flu'],  self.jointVelocity_data['fld'],  
+                            self.jointVelocity_data['frh'],  - self.jointVelocity_data['fru'],  - self.jointVelocity_data['frd'], 
+                            -self.jointVelocity_data['rlh'],  self.jointVelocity_data['rlu'],  self.jointVelocity_data['rld'],    
+                            -self.jointVelocity_data['rrh'],  - self.jointVelocity_data['rru'],  - self.jointVelocity_data['rrd']]
+        else:
+            self.dof_pos = [-1] * 12
+            self.dof_vel = [-1] * 12
+
         return self.dof_pos, self.dof_vel
+
 
 class LinarASub(Node):
     def __init__(self):
@@ -164,6 +170,8 @@ class DDSHandler:
         self.sub = ChannelSubscriber("rt/lowcmd", LowCmd_)
         self.sub.Init(self.LowCmdMessageHandler, 10) 
 
+        # self.sub = ChannelSubscriber("rt/lowstate", LowState_)
+        # self.sub.Init(self.LowStateMessageHandler, 10) 
 
         self.joint_state_msg = JointState()
         self.joint_state_msg.name = [
@@ -193,6 +201,9 @@ class DDSHandler:
                     i += 1
                 else:
                     break
+
+    def LowStateMessageHandler(self, msg: LowState_):
+        print(msg)
         
 def stand_up():
     runing_time = 0
@@ -290,33 +301,64 @@ class Controller:
         self.pidGainPub.publisher.publish(pid_gain_msg)
 
     def topic2low_state(self):
-        joint_state = self.jointStateSub.get_jointAngle_data()
+        joint_dof_pos, joint_dof_vel = self.jointStateSub.get_jointAngle_data()
 
-        orientation = self.quaternionSub.get_Imu_data()
-        linear_acceleration = self.linearASub.get_Imu_data()
+        quaternion = self.quaternionSub.get_Imu_data()
         angular_velocity = self.angularVSub.get_Imu_data()
+        linear_acceleration = self.linearASub.get_Imu_data()
 
-        #TODO: Add the logic to process the data and send it to the robot
+        low_state = unitree_go_msg_dds__LowState_()
+        low_state.head[0] = 0xFE
+        low_state.head[1] = 0xEF
+        low_state.level_flag = 0xFF
 
+        # low_state.imu_state.quaternion = quaternion
+        # low_state.imu_state.gyroscope = angular_velocity
+        # low_state.imu_state.linear_acceleration = linear_acceleration
 
-if __name__ == '__main__':
+        low_state.imu_state.quaternion = [0] * 4
+        low_state.imu_state.gyroscope = [0] * 3
+        low_state.imu_state.linear_acceleration = [0] * 3
+
+        for i in range(12):
+            low_state.motor_state[i].q = joint_dof_pos[i]
+            low_state.motor_state[i].dq = joint_dof_vel[i]
+            low_state.motor_state[i].tau_est = 0.0
+
+        # low_state.bms_state.crc = crc.Crc(low_state)
+        self.dds_handler.pub.Write(low_state)
+
+def main():
     controller = Controller()
 
-    cmd_dict = {
-        "read": 0
-    }
+    # command_dict = {
+    #     "t2ls": controller.run_topic2low_state,
+    #     "lc2t": controller.run_low_cmd2topic,
+    # }
 
     start_time = time.perf_counter()
     now_time = time.perf_counter()
-    while (now_time - start_time) < 20:
+    while (now_time - start_time) < 60:
         now_time = time.perf_counter()
-        # print(controller.quaternionSub.get_Imu_data())
+
         controller.low_cmd2topic()
-        # print("Quaternion: ", quaternionSub.get_Imu_data())
-        # print("Linear Acceleration: ", linearASub.get_Imu_data())
-        # print("Angular Velocity: ", angularVSub.get_Imu_data())
-        # print(jointStateSub.get_jointAngle_data())
-        # print(dds_handler.pid_gain_msg)
+        # print("joint_state_msg: ", controller.dds_handler.joint_state_msg)
+        # controller.topic2low_state()
+
+        # try:
+        #     cmd = input("CMD: ")
+        #     if cmd in command_dict:
+        #         command_dict[cmd]()
+        #     elif cmd == "exit":
+        #         break
+        #     else:
+        #         print("Invalid command")
+        # except Exception as e:
+        #     traceback.print_exc()
+        #     break  
+
+if __name__ == '__main__':
+    main()
 
 
 
@@ -426,4 +468,34 @@ if __name__ == '__main__':
 #               velocity=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
 #               effort=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
+# LowState_(head=b'\x00\x00', level_flag=0, frame_reserve=0, sn=[0, 0], version=[0, 0], bandwidth=0, 
+#           imu_state=IMUState_(quaternion=[0.9999998211860657, -4.1879070522554684e-07, -0.0006113952258601785, -7.247697067214176e-05], 
+#                               gyroscope=[-3.9969144660645384e-10, 1.540806442790199e-05, -9.745352080869907e-09], 
+#                               accelerometer=[0.011995566077530384, -7.347277460212354e-06, 9.809992790222168], 
+#                               rpy=[-7.489576887564908e-07, -0.0012227905681356788, -0.0001449535193387419], 
+#                               temperature=0), 
+#           motor_state=[MotorState_(mode=0, q=1.0490176677703857, dq=5.930856500357962e-11, ddq=0.0, tau_est=2.1141433715820312, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=3.491147756576538, dq=1.036625985051387e-08, ddq=0.0, tau_est=0.3755834698677063, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-0.8275766968727112, dq=7.152657133246976e-09, ddq=0.0, tau_est=6.457313537597656, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-1.0490179061889648, dq=6.05815120291453e-11, ddq=0.0, tau_est=-2.114149808883667, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=3.491147756576538, dq=1.036691266165235e-08, ddq=0.0, tau_est=0.3755500316619873, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-0.8275766968727112, dq=7.152813008559633e-09, ddq=0.0, tau_est=6.457340717315674, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=1.0074803829193115, dq=0.00041081110248342156, ddq=0.0, tau_est=2.999535322189331, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=4.539256572723389, dq=-2.0325197169768217e-07, ddq=0.0, tau_est=1.8104209899902344, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-0.8237861394882202, dq=-8.680347463041471e-08, ddq=0.0, tau_est=8.662972450256348, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-1.0074682235717773, dq=-0.00041076986235566437, ddq=0.0, tau_est=-2.9995203018188477, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=4.539256572723389, dq=-2.0323120963894326e-07, ddq=0.0, tau_est=1.8105170726776123, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=-0.8237860798835754, dq=-8.679364782437915e-08, ddq=0.0, tau_est=8.663010597229004, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0]), 
+#                        MotorState_(mode=0, q=0.0, dq=0.0, ddq=0.0, tau_est=0.0, q_raw=0.0, dq_raw=0.0, ddq_raw=0.0, temperature=0, lost=0, reserve=[0, 0])], 
+#                        bms_state=BmsState_(version_high=0, version_low=0, status=0, soc=0, current=0, cycle=0, bq_ntc=b'\x00\x00', mcu_ntc=b'\x00\x00', 
+#                                            cell_vol=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]), foot_force=[0, 0, 0, 0], foot_force_est=[0, 0, 0, 0], tick=0, 
+#                                            wireless_remote=b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 
+#                                            bit_flag=0, adc_reel=0.0, temperature_ntc1=0, temperature_ntc2=0, power_v=0.0, power_a=0.0, fan_frequency=[0, 0, 0, 0], reserve=0, crc=0)
 

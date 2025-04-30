@@ -21,6 +21,17 @@ stand_down_joint_pos = np.array([
 ],
                                 dtype=float)
 
+default_pose = [ 3, -1.6, 0,
+                -3 , 1.6, 0,
+                -3 , 1.6, 0,
+                 3 ,-1.6, 0]
+
+test_pose = [- 0.0414070188999176, 0.061594702303409576, -0.14110097289085388
+            , 0.18578624725341797, 0.7276803851127625, -0.6791616678237915
+            , -0.7462558150291443, 0.7220953106880188, -1.4941880702972412
+            , 1.5796664953231812, 1.5809358358383179, -1.3872215747833252]
+
+
 dt = 0.002
 runing_time = 0.0
 crc = CRC()
@@ -90,9 +101,9 @@ class Go2Channel:
         # self.pub.Init()
 
         # Create a subscriber to receive the latest robot state every certain seconds 
-        self.low_state = None
-        self.sub = ChannelSubscriber("rt/lowstate", LowState_)
-        self.sub.Init(self.LowStateMessageHandler, 10)  
+        # self.low_state = None
+        # self.sub = ChannelSubscriber("rt/lowstate", LowState_)
+        # self.sub.Init(self.LowStateMessageHandler, 10)  
 
         # self.sub0 = ChannelSubscriber("rt/lowcmd", LowCmd_)
         # self.sub0.Init(self.LowCmdMessageHandler, 10)  
@@ -229,43 +240,61 @@ if __name__ == '__main__':
         cmd.motor_cmd[i].mode = 0x01  # (PMSM) mode
         cmd.motor_cmd[i].q = 0.0
         cmd.motor_cmd[i].kp = 0.0
-        cmd.motor_cmd[i].dq = 0.0
+        # cmd.motor_cmd[i].dq = 0.0
         cmd.motor_cmd[i].kd = 0.0
-        cmd.motor_cmd[i].tau = 0.0
+        # cmd.motor_cmd[i].tau = 0.0
 
     while True:
         step_start = time.perf_counter()
 
         runing_time += dt
 
-        if (runing_time < 3.0):
+        if (runing_time < 5.0):
             # Stand up in first 3 second
             
             # Total time for standing up or standing down is about 1.2s
+        #     phase = np.tanh(runing_time / 1.2)
+        #     for i in range(12):
+        #         cmd.motor_cmd[i].q = phase * stand_up_joint_pos[i] + (
+        #             1 - phase) * stand_down_joint_pos[i]
+        #         # cmd.motor_cmd[i].q = 
+        #         cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
+        #         # cmd.motor_cmd[i].dq = 0.0
+        #         cmd.motor_cmd[i].kd = 3.5
+        #         # cmd.motor_cmd[i].tau = 0
+        # else:
+        #     # Then stand down
+        #     phase = np.tanh((runing_time - 3.0) / 1.2)
+        #     for i in range(12):
+        #         cmd.motor_cmd[i].q = phase * stand_down_joint_pos[i] + (
+        #             1 - phase) * stand_up_joint_pos[i]
+        #         cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
+        #         # cmd.motor_cmd[i].dq = 0.0
+        #         cmd.motor_cmd[i].kd = 3.5
+        #         # cmd.motor_cmd[i].tau = 0
+
             phase = np.tanh(runing_time / 1.2)
             for i in range(12):
-                # cmd.motor_cmd[i].q = phase * stand_up_joint_pos[i] + (
-                #     1 - phase) * stand_down_joint_pos[i]
-                cmd.motor_cmd[i].q = 0
+                cmd.motor_cmd[i].q = phase * test_pose[i] + (
+                    1 - phase) * default_pose[i]
                 cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
-                cmd.motor_cmd[i].dq = 0.0
+                # cmd.motor_cmd[i].dq = 0.0
                 cmd.motor_cmd[i].kd = 3.5
-                cmd.motor_cmd[i].tau = 5
-        else:
-            # Then stand down
-            phase = np.tanh((runing_time - 3.0) / 1.2)
-            for i in range(12):
-                cmd.motor_cmd[i].q = phase * stand_down_joint_pos[i] + (
-                    1 - phase) * stand_up_joint_pos[i]
-                cmd.motor_cmd[i].kp = 50.0
-                cmd.motor_cmd[i].dq = 0.0
-                cmd.motor_cmd[i].kd = 3.5
-                cmd.motor_cmd[i].tau = 0.0
+                # cmd.motor_cmd[i].tau = 0
+            else:
+                # Then stand down
+                phase = np.tanh((runing_time - 3.0) / 1.2)
+                for i in range(12):
+                    cmd.motor_cmd[i].q = phase * default_pose[i] + (
+                        1 - phase) * test_pose[i]
+                    cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
+                    # cmd.motor_cmd[i].dq = 0.0
+                    cmd.motor_cmd[i].kd = 3.5
+                    # cmd.motor_cmd[i].tau = 0
+
 
         cmd.crc = crc.Crc(cmd)
         pub.Write(cmd)
-
-        print(ch.low_state)
 
         time_until_next_step = dt - (time.perf_counter() - step_start)
         if time_until_next_step > 0:
@@ -329,3 +358,40 @@ if __name__ == '__main__':
 #             foot_force=[0, 0, 0, 0], foot_force_est=[0, 0, 0, 0], tick=0, 
 #             wireless_remote=b'\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00', 
 #             bit_flag=0, adc_reel=0.0, temperature_ntc1=0, temperature_ntc2=0, power_v=0.0, power_a=0.0, fan_frequency=[0, 0, 0, 0], reserve=0, crc=0)
+
+# ---
+# header:
+#   stamp:
+#     sec: 0
+#     nanosec: 0
+#   frame_id: ''
+# name:
+# - flh
+# - frh
+# - rlh
+# - rrh
+# - flu
+# - fru
+# - rlu
+# - rru
+# - fld
+# - frd
+# - rld
+# - rrd
+# position:
+# - 0.0414070188999176
+# - 0.061594702303409576
+# - -0.14110097289085388
+# - 0.18578624725341797
+# - 0.7276803851127625
+# - -0.6791616678237915
+# - -0.7462558150291443
+# - 0.7220953106880188
+# - -1.4941880702972412
+# - 1.5796664953231812
+# - 1.5809358358383179
+# - -1.3872215747833252
+# velocity: []
+# effort: []
+# ---
+

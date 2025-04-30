@@ -101,18 +101,24 @@ class MotorManager:
         self.jointAngle_data = self.jointAngleSub.get_jointAngle_data()
         self.kp_kd_list = self.pidGainSub.get_pid_gains()
 
-        required_keys = ['frh', 'fru', 'frd', 'flh', 'flu', 'fld', 'rrh', 'rru', 'rrd', 'rlh', 'rlu', 'rld']
-        for key in required_keys:
-            if key not in self.jointAngle_data:
-                print(f"Joint key '{key}' not found in joint states! Setting default value.")
-                self.jointAngle_data[key] = 0.0  # Default safe value
-            elif not self.is_within_limits(key, self.jointAngle_data[key]):
-                print(f"Warning: {key} angle {self.jointAngle_data[key]} is out of bounds!")
-                self.jointAngle_data[key] = max(min(self.jointAngle_data[key], self.motor_limits[key][1]), self.motor_limits[key][0])
+        if bool(self.jointAngle_data):
+            required_keys = ['frh', 'fru', 'frd', 'flh', 'flu', 'fld', 'rrh', 'rru', 'rrd', 'rlh', 'rlu', 'rld']
+            for key in required_keys:
+                if key not in self.jointAngle_data:
+                    print(f"Joint key '{key}' not found in joint states! Setting default value.")
+                    self.jointAngle_data[key] = 0.0  # Default safe value
+                elif not self.is_within_limits(key, self.jointAngle_data[key]):
+                    print(f"Warning: {key} angle {self.jointAngle_data[key]} is out of bounds!")
+                    self.jointAngle_data[key] = max(min(self.jointAngle_data[key], self.motor_limits[key][1]), self.motor_limits[key][0])
 
-        self.joint_angles = np.array([[self.jointAngle_data['frd'],    self.jointAngle_data['fld'], self.jointAngle_data['rrd'],  self.jointAngle_data['rld']],
-                                      [self.jointAngle_data['fru'],    self.jointAngle_data['flu'], self.jointAngle_data['rru'],  self.jointAngle_data['rlu']],
-                                      [self.jointAngle_data['frh'],    self.jointAngle_data['flh'], self.jointAngle_data['rrh'],  self.jointAngle_data['rlh']]]) 
+            self.joint_angles = np.array([[self.jointAngle_data['frd'],    self.jointAngle_data['fld'], self.jointAngle_data['rrd'],  self.jointAngle_data['rld']],
+                                        [self.jointAngle_data['fru'],    self.jointAngle_data['flu'], self.jointAngle_data['rru'],  self.jointAngle_data['rlu']],
+                                        [self.jointAngle_data['frh'],    self.jointAngle_data['flh'], self.jointAngle_data['rrh'],  self.jointAngle_data['rlh']]]) 
+        else:
+            self.joint_angles =np.array([[ 2.7, -2.7, -2.7,  2.7],
+                                        [-2.4,  2.4,  2.4, -2.4],
+                                        [ 0.,   0.,   0.,   0. ]])
+
         
     def _run_motor(self):
         interval = 1.0 / 100  # 150 Hz -> 每次執行間隔 6.67 ms
@@ -274,8 +280,9 @@ class DualControlCmd:
                         [  -1.6 ,   1.6,  1.6,  -1.6 ], 
                         [     0 ,     0,    0,     0]] 
 
-        if kp_kd_list is None:
-            kp_kd_list = [ 3, 0.1]
+        if kp_kd_list is None or len(kp_kd_list) < 2:
+            print("Warning: Invalid kp_kd_list provided. Using default values [3, 0.1].")
+            kp_kd_list = [3, 0.1]
         
         for i, motor_list in enumerate(self.leg_motor_list):
             for j, motor in enumerate(motor_list):

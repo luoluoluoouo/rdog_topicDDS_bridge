@@ -17,3 +17,14 @@ ros2 launch reddog_hardware bringup.launch.py
 
 IMU
 ros2 launch xsens_mti_ros2_driver xsens_mti_node.launch.py 
+
+
+========================================
+Port
+start/setup_ports.sh
+
+python3 /home/csl/rdog/reddog_ros2_ws/src/redDog_RL_Him/ros2con/controller/stand_def.py
+ros2 launch reddog_hardware motor.launch.py
+
+python3 topic_dds_bridge.py
+python3 stand.py 
