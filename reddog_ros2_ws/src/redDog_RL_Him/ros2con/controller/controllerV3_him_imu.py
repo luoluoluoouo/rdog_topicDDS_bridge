@@ -429,7 +429,7 @@ def main(args=None):
     
     controller.move_to_default_pos()
 
-    controller.ready_to_standup()
+    # controller.ready_to_standup()
 
     # controller.keep_pos()
 

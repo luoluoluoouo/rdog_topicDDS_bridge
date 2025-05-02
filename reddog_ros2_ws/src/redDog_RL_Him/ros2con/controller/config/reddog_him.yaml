@@ -1,6 +1,6 @@
 # 
 # policy_path: "/home/csl/test/legged_rl_ws/src/legged_rl/legged_gym/logs/rough_Reddog/exported/policies/policy_1.pt"
-policy_path: "policy_him2.pt"
+policy_path: "/home/csl/rdog/reddog_ros2_ws/src/redDog_RL_Him/ros2con/controller/config/policy_him2.pt"
 xml_path: "scene_terrain_1.xml"
 
 # Total simulation time

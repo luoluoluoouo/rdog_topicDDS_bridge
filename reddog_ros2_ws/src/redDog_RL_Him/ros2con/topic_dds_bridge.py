@@ -96,7 +96,6 @@ class JointStateSub(Node):
 
         return self.dof_pos, self.dof_vel
 
-
 class LinarASub(Node):
     def __init__(self):
         super().__init__('Imu_linear_acceleration_subscriber')
@@ -174,26 +173,53 @@ class DDSHandler:
         # self.sub.Init(self.LowStateMessageHandler, 10) 
 
         self.joint_state_msg = JointState()
+        self.last_joint_state_msg = JointState()
         self.joint_state_msg.name = [
             'flh', 'frh', 'rlh', 'rrh',   # Hips
             'flu', 'fru', 'rlu', 'rru',  # Upper legs
             'fld', 'frd', 'rld', 'rrd'   # Lower legs
         ]
+        # self.joint_state_msg.name = ['flh', 'flu', 'fld',
+        #                              'frh','fru','frd',
+        #                              'rlh','rlu','rld',
+        #                              'rrh','rru','rrd']
+
         self.pid_gain_msg = Float32MultiArray()
         self.pid_gain_msg.data = [float(0), float(0)]
 
+    def mujoco_ang2real_ang(self, dof_pos):
+        motor_order = ['flh', 'frh', 'rlh', 'rrh',  # Hips
+                'flu', 'fru', 'rlu', 'rru',  # Upper legs
+                'fld', 'frd', 'rld', 'rrd']  # Lower legs
+
+        mujoco_order = ['frh', 'fru', 'frd', 
+                        'flh', 'flu', 'fld',  
+                        'rrh', 'rru', 'rrd',
+                        'rlh', 'rlu', 'rld']
+            
+        index_map = [mujoco_order.index(name) for name in motor_order]
+
+        reordered_dof_pos = [dof_pos[i] for i in index_map]
+
+        reordered_dof_pos = [-reordered_dof_pos[0], -reordered_dof_pos[1], -reordered_dof_pos[2], -reordered_dof_pos[3],  
+                             reordered_dof_pos[4], -reordered_dof_pos[5],  reordered_dof_pos[6], -reordered_dof_pos[7], 
+                             reordered_dof_pos[8], -reordered_dof_pos[9],  reordered_dof_pos[10],-reordered_dof_pos[11]]
+        
+        return reordered_dof_pos
 
     def LowCmdMessageHandler(self, msg: LowCmd_):
         self.low_cmd = msg
         if self.low_cmd is not None:
             # print(self.low_cmd.motor_cmd)
             self.joint_state_msg.position = []
+            dof_pos = []
             self.joint_state_msg.velocity = []
             self.joint_state_msg.effort = []
             i = 0
             for motor_cmd in self.low_cmd.motor_cmd:
                 if i < 12:
-                    self.joint_state_msg.position.append(motor_cmd.q)
+                    dof_pos.append(round(motor_cmd.q, 2))
+                    # self.joint_state_msg.position.append(motor_cmd.q)
                     self.joint_state_msg.velocity.append(motor_cmd.dq)
                     self.joint_state_msg.effort.append(motor_cmd.tau)
                     self.pid_gain_msg.data[0] = motor_cmd.kp
@@ -201,6 +227,12 @@ class DDSHandler:
                     i += 1
                 else:
                     break
+
+            self.joint_state_msg.position = self.mujoco_ang2real_ang(dof_pos)
+
+            self.last_joint_state_msg = self.joint_state_msg
+        else:
+            self.joint_state_msg = self.last_joint_state_msg
 
     def LowStateMessageHandler(self, msg: LowState_):
         print(msg)
@@ -338,7 +370,7 @@ def main():
 
     start_time = time.perf_counter()
     now_time = time.perf_counter()
-    while (now_time - start_time) < 60:
+    while (now_time - start_time) < 180:
         now_time = time.perf_counter()
 
         controller.low_cmd2topic()
