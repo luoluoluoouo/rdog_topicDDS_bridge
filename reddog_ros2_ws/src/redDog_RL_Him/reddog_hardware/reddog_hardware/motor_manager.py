@@ -108,7 +108,7 @@ class MotorManager:
                 self.jointAngle_data[key] = 0.0  # Default safe value
             elif not self.is_within_limits(key, self.jointAngle_data[key]):
                 print(f"Warning: {key} angle {self.jointAngle_data[key]} is out of bounds!")
-                # self.jointAngle_data[key] = max(min(self.jointAngle_data[key], self.motor_limits[key][1]), self.motor_limits[key][0])
+                self.jointAngle_data[key] = max(min(self.jointAngle_data[key], self.motor_limits[key][1]), self.motor_limits[key][0])
                 self.jointAngle_data[key] = 0
 
         self.joint_angles = np.array([[self.jointAngle_data['frd'],    self.jointAngle_data['fld'], self.jointAngle_data['rrd'],  self.jointAngle_data['rld']],

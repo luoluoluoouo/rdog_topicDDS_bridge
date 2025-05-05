@@ -15,6 +15,13 @@ import matplotlib.pyplot as plt
 import argparse
 import threading
 
+from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber
+from unitree_sdk2py.core.channel import ChannelFactoryInitialize
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowCmd_
+from unitree_sdk2py.idl.default import unitree_go_msg_dds__LowState_
+from unitree_sdk2py.idl.unitree_go.msg.dds_ import LowCmd_, LowState_
+from unitree_sdk2py.utils.crc import CRC
+
 class CmdVelSubscriber(Node):
     def __init__(self):
         super().__init__('cmd_vel_subscriber')
@@ -170,6 +177,10 @@ class MotorController(Node):
         spin_thread.start()
         print("thread start")
 
+        ChannelFactoryInitialize(1, "lo")
+        self.pub = ChannelPublisher("rt/lowcmd", LowCmd_)
+        self.pub.Init()  
+
     def get_vel_data(self):
         self.horizontal_velocity = np.array([self.cmd_vel.linear_x, self.cmd_vel.linear_y]) * 4
         self.yaw_rate = self.cmd_vel.angular_z * 1.5
@@ -211,9 +222,55 @@ class MotorController(Node):
         msg.data = [float(self.kp), float(self.kq)]
         self.kp_kq_publisher_.publish(msg)
 
+    def real_ang2mujoco_ang(self, dof_pos):
+        # flat_dof_pos = [0.0] * 12
+        # for i in range(3):
+        #     for j in range(4):
+        #         print(dof_pos)
+        #         flat_dof_pos[4*i+j] = dof_pos[i][j]
+
+        mujoco_order = ['frh', 'fru', 'frd', 
+                        'flh', 'flu', 'fld',  
+                        'rrh', 'rru', 'rrd',
+                        'rlh', 'rlu', 'rld']
+        
+
+        motor_order = ['flh', 'frh', 'rlh', 'rrh',  # Hips
+                'flu', 'fru', 'rlu', 'rru',  # Upper legs
+                'fld', 'frd', 'rld', 'rrd']  # Lower legs
+            
+        index_map = [motor_order.index(name) for name in mujoco_order]
+
+        reordered_dof_pos = [dof_pos[i] for i in index_map]
+
+        reordered_dof_pos = [-reordered_dof_pos[0], -reordered_dof_pos[1], -reordered_dof_pos[2],  
+                            -reordered_dof_pos[3],  reordered_dof_pos[4],  reordered_dof_pos[5],  
+                            -reordered_dof_pos[6], -reordered_dof_pos[7], -reordered_dof_pos[8], 
+                            -reordered_dof_pos[9],  reordered_dof_pos[10], reordered_dof_pos[11]]
+        
+        return reordered_dof_pos
+
     def send_cmd(self):
-        self.publish_joint_states()
-        self.publish_kp_kq()
+        # self.publish_joint_states()
+        # self.publish_kp_kq()
+        crc = CRC()
+        cmd = unitree_go_msg_dds__LowCmd_()
+        cmd.head[0] = 0xFE
+        cmd.head[1] = 0xEF
+        cmd.level_flag = 0xFF
+        cmd.gpio = 0
+
+        position = np.array(self.current_angles).flatten().tolist()
+        position = self.real_ang2mujoco_ang(position)
+        for i in range(12):
+            cmd.motor_cmd[i].q = position[i]
+            cmd.motor_cmd[i].kp = 10
+            cmd.motor_cmd[i].dq = 0.0
+            cmd.motor_cmd[i].kd = 0.4
+            cmd.motor_cmd[i].tau = 0
+
+        cmd.crc = crc.Crc(cmd)
+        self.pub.Write(cmd)
 
     def move_to_default_pos(self):
         self.kp = 3
@@ -415,7 +472,6 @@ class MotorController(Node):
             plt.close() 
             print("Plot saved as 'simulation_plot.png'. Exiting.")
 
-
 def main(args=None):
     parser = argparse.ArgumentParser(description='Controller for Quadruped.')
     parser.add_argument('config_file', type=str, help='Path to configuration file.')
@@ -429,9 +485,9 @@ def main(args=None):
     
     controller.move_to_default_pos()
 
-    # controller.ready_to_standup()
+    controller.ready_to_standup()
 
-    # controller.keep_pos()
+    controller.keep_pos()
 
     while True:
         try:

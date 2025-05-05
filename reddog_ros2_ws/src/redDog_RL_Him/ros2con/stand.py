@@ -284,11 +284,23 @@ def main():
         cmd.motor_cmd[i].kd = 0.0
         cmd.motor_cmd[i].tau = 0.0
 
-    run_time = time.perf_counter()
-    step_start = 0
-
     default_joint_angles = real_ang2mujoco_ang(default_joint_angles)
     command_joint_angles = real_ang2mujoco_ang(command_joint_angles)
+
+    for i in range(12):
+        cmd.motor_cmd[i].q = default_joint_angles[i]
+        cmd.motor_cmd[i].kp = 10
+        cmd.motor_cmd[i].dq = 0.0
+        cmd.motor_cmd[i].kd = 0.4
+        cmd.motor_cmd[i].tau = 0
+
+    cmd.crc = crc.Crc(cmd)
+    pub.Write(cmd)
+    time.sleep(1)
+    print("Set to default angle")
+
+    run_time = time.perf_counter()
+    step_start = 0
     while (step_start - run_time) < 10:
         step_start = time.perf_counter()
 
@@ -315,20 +327,27 @@ def main():
         if (runing_time < 3.0):
             phase = np.tanh(runing_time / 2)
             for i in range(12):
-                cmd.motor_cmd[i].q = command_joint_angles[i]
-                cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
+                cmd.motor_cmd[i].q = phase * command_joint_angles[i] + (1 - phase) * default_joint_angles[i]
+                cmd.motor_cmd[i].kp = 10
                 cmd.motor_cmd[i].dq = 0.0
-                cmd.motor_cmd[i].kd = 3.5
+                cmd.motor_cmd[i].kd = 0.4
                 cmd.motor_cmd[i].tau = 0
         else:
             # Then stand down
             phase = np.tanh((runing_time - 3.0) / 2)
             for i in range(12):
-                cmd.motor_cmd[i].q = default_joint_angles[i]
-                cmd.motor_cmd[i].kp = phase * 50.0 + (1 - phase) * 20.0
+                cmd.motor_cmd[i].q = phase * default_joint_angles[i] + (1 - phase) * command_joint_angles[i]
+                cmd.motor_cmd[i].kp = 10
                 cmd.motor_cmd[i].dq = 0.0
-                cmd.motor_cmd[i].kd = 3.5
+                cmd.motor_cmd[i].kd = 0.4
                 cmd.motor_cmd[i].tau = 0
+
+        # for i in range(12):
+        #     cmd.motor_cmd[i].q = default_joint_angles[i]
+        #     cmd.motor_cmd[i].kp = 10
+        #     cmd.motor_cmd[i].dq = 0.0
+        #     cmd.motor_cmd[i].kd = 0.4
+        #     cmd.motor_cmd[i].tau = 0
 
         cmd.crc = crc.Crc(cmd)
         pub.Write(cmd)
