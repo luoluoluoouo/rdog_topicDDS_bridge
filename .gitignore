@@ -5,8 +5,12 @@ reddog_ros2control/
 reddog_ros2_ws/build/
 reddog_ros2_ws/log/
 reddog_ros2_ws/install/
+ros2con_ws/
+rlros2con_ws/
+libtorch/
+rlsar_ws/
 __pycache__/
 *.pyc
 .vscode/
 .venv/
-.png
+*.png

@@ -264,9 +264,9 @@ class MotorController(Node):
         position = self.real_ang2mujoco_ang(position)
         for i in range(12):
             cmd.motor_cmd[i].q = position[i]
-            cmd.motor_cmd[i].kp = 10
+            cmd.motor_cmd[i].kp = self.kp
             cmd.motor_cmd[i].dq = 0.0
-            cmd.motor_cmd[i].kd = 0.4
+            cmd.motor_cmd[i].kd = self.kq
             cmd.motor_cmd[i].tau = 0
 
         cmd.crc = crc.Crc(cmd)
