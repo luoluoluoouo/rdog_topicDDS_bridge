@@ -96,7 +96,21 @@ class MotorManager:
     
     def get_jointAngle_data(self):
         self.jointAngle_data = self.jointAngleSub.get_jointAngle_data()
+        if not self.jointAngle_data:
+            print("No joint angle data received! Using default values.")
+            # self.jointAngle_data = [[     3 ,    -3,   -3,     3 ], 
+            #                         [  -1.6 ,   1.6,  1.6,  -1.6 ], 
+            #                         [     0 ,     0,    0,     0]] 
+            self.jointAngle_data = {
+                'frd': 3.0, 'fld': -3.0, 'rrd': -3.0, 'rld': 3.0,
+                'fru': -1.6, 'flu': 1.6, 'rru': 1.6, 'rlu': -1.6,
+                'frh': 0.0, 'flh': 0.0, 'rrh': 0.0, 'rlh': 0.0
+            }
+      
         self.kp_kd_list = self.pidGainSub.get_pid_gains()
+        if not self.kp_kd_list:
+            print("No PID gains received! Using default values.")
+            self.kp_kd_list = [3, 0.1]
 
         required_keys = ['frh', 'fru', 'frd', 'flh', 'flu', 'fld', 'rrh', 'rru', 'rrd', 'rlh', 'rlu', 'rld']
         for key in required_keys:

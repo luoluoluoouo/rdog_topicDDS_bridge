@@ -243,6 +243,12 @@ class Go2Channel:
             self.fan_data = self.fan.hex()
     
 def main():
+    initial_joint_angles = np.array([
+            [ 0.0,   0.0,  0.0,   0.0 ],
+            [ 1.6, - 1.6, -1.6,   1.6 ], 
+            [  -3,     3,    3,    -3 ], 
+        ])
+            
     default_joint_angles = np.array([
                             [  0.0,   0.0,   0.0, 0.0],     # Hip
                             [ 2.4, - 2.4, -2.4,   2.4 ],  # Upper leg
@@ -284,11 +290,12 @@ def main():
         cmd.motor_cmd[i].kd = 0.0
         cmd.motor_cmd[i].tau = 0.0
 
+    initial_joint_angles = real_ang2mujoco_ang(initial_joint_angles)
     default_joint_angles = real_ang2mujoco_ang(default_joint_angles)
     command_joint_angles = real_ang2mujoco_ang(command_joint_angles)
 
     for i in range(12):
-        cmd.motor_cmd[i].q = default_joint_angles[i]
+        cmd.motor_cmd[i].q = initial_joint_angles[i]
         cmd.motor_cmd[i].kp = 10
         cmd.motor_cmd[i].dq = 0.0
         cmd.motor_cmd[i].kd = 0.4
@@ -296,7 +303,7 @@ def main():
 
     cmd.crc = crc.Crc(cmd)
     pub.Write(cmd)
-    time.sleep(1)
+    time.sleep(3)
     print("Set to default angle")
 
     run_time = time.perf_counter()

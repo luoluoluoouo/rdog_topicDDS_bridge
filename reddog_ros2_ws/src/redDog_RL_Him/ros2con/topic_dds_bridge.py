@@ -23,7 +23,7 @@ class JointStatePub(Node):
         super().__init__('topicddsbridge_jointst_pub')
         self.publisher = self.create_publisher(
             JointState,
-            'joint_states',
+            'cmd/joint_states',
             10
         )
 
@@ -79,7 +79,7 @@ class JointStateSub(Node):
 
         return self.dof_pos, self.dof_vel
 
-class LinarASub(Node):
+class LinearASub(Node):
     def __init__(self):
         super().__init__('Imu_linear_acceleration_subscriber')
         self.subscription = self.create_subscription(
@@ -218,7 +218,7 @@ class Controller:
 
         rclpy.init()
         self.jointStateSub = JointStateSub()
-        self.linearASub = LinarASub()
+        self.linearASub = LinearASub()
         self.angularVSub = AngularVSub()
         self.quaternionSub = QuaternionSub()
         self.jointStatePub = JointStatePub()
@@ -260,19 +260,18 @@ class Controller:
         quaternion = self.quaternionSub.get_Imu_data()
         angular_velocity = self.angularVSub.get_Imu_data()
         linear_acceleration = self.linearASub.get_Imu_data()
+        if quaternion is None or angular_velocity is None or linear_acceleration is None:
+            print("Error: IMU data is None")
+            return -1
 
         low_state = unitree_go_msg_dds__LowState_()
-        low_state.head[0] = 0xFE
-        low_state.head[1] = 0xEF
-        low_state.level_flag = 0xFF
-
-        # low_state.imu_state.quaternion = quaternion
-        # low_state.imu_state.gyroscope = angular_velocity
-        # low_state.imu_state.linear_acceleration = linear_acceleration
-
-        low_state.imu_state.quaternion = [0] * 4
-        low_state.imu_state.gyroscope = [0] * 3
-        low_state.imu_state.linear_acceleration = [0] * 3
+        low_state.head[0] = 0x00
+        low_state.head[1] = 0x00
+        low_state.level_flag = 0x00
+        
+        low_state.imu_state.quaternion = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
+        low_state.imu_state.gyroscope = [angular_velocity.x, angular_velocity.y, angular_velocity.z]
+        low_state.imu_state.accelerometer = [linear_acceleration.x, linear_acceleration.y, linear_acceleration.z]
 
         for i in range(12):
             low_state.motor_state[i].q = joint_dof_pos[i]
@@ -341,10 +340,11 @@ def main():
 
     start_time = time.perf_counter()
     now_time = time.perf_counter()
-    while (now_time - start_time) < 180:
+    while (now_time - start_time) < 360:
         now_time = time.perf_counter()
 
         controller.low_cmd2topic()
+        controller.topic2low_state()
         # controller.test_pub()
 
 if __name__ == '__main__':

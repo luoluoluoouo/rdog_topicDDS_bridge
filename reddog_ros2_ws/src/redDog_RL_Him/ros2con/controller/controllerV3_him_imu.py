@@ -129,7 +129,7 @@ class QuaternionSubscriber(Node):
 class MotorController(Node):
     def __init__(self):
         super().__init__('motor_controller')
-        self.publisher_ = self.create_publisher(JointState, 'joint_states', 10)
+        self.publisher_ = self.create_publisher(JointState, 'cmd/joint_states', 10)
         self.kp_kq_publisher_ = self.create_publisher(Float32MultiArray, 'pid_gain', 10)
         self.timer_joint = self.create_timer(0.02, self.publish_joint_states)
         self.timer_pidgain = self.create_timer(0.02, self.publish_kp_kq)
@@ -150,6 +150,12 @@ class MotorController(Node):
             [  2.4,  -2.4, -2.4,  2.4],  # Upper leg
             [ -2.7,   2.7,  2.7, -2.7]  # Lower leg
         ])
+
+        # self.default_joint_angles = np.array([
+        #     [  0.0,   0.0,   0.0, 0.0],     # Hip
+        #     [  2.39,  -2.39, -2.39,  2.39],  # Upper leg
+        #     [ -2.69,   2.69,  2.69, -2.69]  # Lower leg
+        # ])
 
         self.command_joint_angles = np.array([
             [    0.1,   -0.1,    0.1,   -0.1],   # Hip
@@ -251,26 +257,26 @@ class MotorController(Node):
         return reordered_dof_pos
 
     def send_cmd(self):
-        # self.publish_joint_states()
-        # self.publish_kp_kq()
-        crc = CRC()
-        cmd = unitree_go_msg_dds__LowCmd_()
-        cmd.head[0] = 0xFE
-        cmd.head[1] = 0xEF
-        cmd.level_flag = 0xFF
-        cmd.gpio = 0
+        self.publish_joint_states()
+        self.publish_kp_kq()
+        # crc = CRC()
+        # cmd = unitree_go_msg_dds__LowCmd_()
+        # cmd.head[0] = 0xFE
+        # cmd.head[1] = 0xEF
+        # cmd.level_flag = 0xFF
+        # cmd.gpio = 0
 
-        position = np.array(self.current_angles).flatten().tolist()
-        position = self.real_ang2mujoco_ang(position)
-        for i in range(12):
-            cmd.motor_cmd[i].q = position[i]
-            cmd.motor_cmd[i].kp = self.kp
-            cmd.motor_cmd[i].dq = 0.0
-            cmd.motor_cmd[i].kd = self.kq
-            cmd.motor_cmd[i].tau = 0
+        # position = np.array(self.current_angles).flatten().tolist()
+        # position = self.real_ang2mujoco_ang(position)
+        # for i in range(12):
+        #     cmd.motor_cmd[i].q = position[i]
+        #     cmd.motor_cmd[i].kp = self.kp
+        #     cmd.motor_cmd[i].dq = 0.0
+        #     cmd.motor_cmd[i].kd = self.kq
+        #     cmd.motor_cmd[i].tau = 0
 
-        cmd.crc = crc.Crc(cmd)
-        self.pub.Write(cmd)
+        # cmd.crc = crc.Crc(cmd)
+        # self.pub.Write(cmd)
 
     def move_to_default_pos(self):
         self.kp = 3
