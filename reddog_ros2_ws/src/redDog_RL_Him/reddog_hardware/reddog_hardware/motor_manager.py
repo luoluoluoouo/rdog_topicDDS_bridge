@@ -373,43 +373,9 @@ def main():
     rclpy.init()
     motor_manager = MotorManager(config_path)
 
-    motor_manager.control_cmd.motor_position_control()
+    motor_manager.control_cmd.reset()
     time.sleep(3)
     motor_manager.run()
-
-    # command_dict = {
-    #     "r": motor_manager.run,
-    #     "stop": motor_manager.stop,
-    #     "reset": motor_manager.control_cmd.reset,
-    #     "read": motor_manager.control_cmd.read,
-    #     "enable": motor_manager.control_cmd.enable_motor,
-    #     "disable": motor_manager.control_cmd.disable_motor,
-    #     "set" : motor_manager.control_cmd.set_zero,
-    # }
-    
-    # print("Available commands:")
-    # print("r - Run all motors")
-    # print("stop - Stop all motors")
-    # print("reset - Reset all motors")
-    # print("read - Read status of all motors")
-    # print("enable - Enable all motors")
-    # print("disable - Disable all motors")
-    # print("exit - Close the system")
-    
-    # while True:
-    #     try:
-    #         cmd = input("CMD: ")
-    #         if cmd in command_dict:
-    #             command_dict[cmd]()
-    #         elif cmd == "exit":
-    #             motor_manager.stop()
-    #             motor_manager.control_cmd.closeSystem()
-    #             break
-    #         else:
-    #             print("Invalid command")
-    #     except Exception as e:
-    #         traceback.print_exc()
-    #         break
 
 if __name__ == '__main__':
     main()
