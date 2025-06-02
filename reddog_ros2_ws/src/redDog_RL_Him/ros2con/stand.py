@@ -294,15 +294,15 @@ def main():
     default_joint_angles = real_ang2mujoco_ang(default_joint_angles)
     command_joint_angles = real_ang2mujoco_ang(command_joint_angles)
 
-    for i in range(12):
-        cmd.motor_cmd[i].q = initial_joint_angles[i]
-        cmd.motor_cmd[i].kp = 10
-        cmd.motor_cmd[i].dq = 0.0
-        cmd.motor_cmd[i].kd = 0.4
-        cmd.motor_cmd[i].tau = 0
+    # for i in range(12):
+    #     cmd.motor_cmd[i].q = initial_joint_angles[i]
+    #     cmd.motor_cmd[i].kp = 10
+    #     cmd.motor_cmd[i].dq = 0.0
+    #     cmd.motor_cmd[i].kd = 0.4
+    #     cmd.motor_cmd[i].tau = 0
 
-    cmd.crc = crc.Crc(cmd)
-    pub.Write(cmd)
+    # cmd.crc = crc.Crc(cmd)
+    # pub.Write(cmd)
     time.sleep(3)
     print("Set to default angle")
 

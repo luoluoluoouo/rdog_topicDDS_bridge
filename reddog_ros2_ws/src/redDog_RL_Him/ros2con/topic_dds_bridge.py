@@ -223,7 +223,6 @@ class Controller:
         self.quaternionSub = QuaternionSub()
         self.jointStatePub = JointStatePub()
         self.pidGainPub = PIDGainPub()
-        
 
         self.executor = rclpy.executors.SingleThreadedExecutor()
         self.executor.add_node(self.jointStateSub)
@@ -235,51 +234,145 @@ class Controller:
         self.spin_thread = threading.Thread(target=self.executor.spin, daemon=True)
         self.spin_thread.start()
 
-        time.sleep(1)
+        # time.sleep(1)
+        self.low_cmd2topic_thread = threading.Thread(target=self.low_cmd2topic) 
+        self.update_low_cmd_thread = threading.Thread(target=self.update_low_cmd)
+
+        self.topic2low_state_thread = threading.Thread(target=self.topic2low_state)
 
         self.is_running = True
-        self.delay = 1/2000
+        self.delay = 1/300
+
+        self.run_low_cmd2topic_frequency = 200  # Hz
+        self.run_topic2low_state_frequency = 1000  # Hz
+
+        self.joint_state_msg = JointState()
+        self.pid_gain_msg = Float32MultiArray()
 
     def run(self):
-        self.low_cmd2topic_thread = threading.Thread(target=self.low_cmd2topic) 
-        self.low_cmd2topic_thread.start() 
+        self.is_running = True
+        self.run_thread = threading.Thread(target=self._run)
+        self.run_thread.start()
 
-    def low_cmd2topic(self):
-        joint_state_msg = self.dds_handler.joint_state_msg
-        pid_gain_msg = self.dds_handler.pid_gain_msg
+    def _run(self):
+        while self.is_running:
+            self.joint_state_msg = self.dds_handler.joint_state_msg
+            self.pid_gain_msg = self.dds_handler.pid_gain_msg
+            time.sleep(self.delay)
+            self.jointStatePub.publisher.publish(self.joint_state_msg)
+            self.pidGainPub.publisher.publish(self.pid_gain_msg)
 
-        time.sleep(self.delay)
+            joint_dof_pos, joint_dof_vel = self.jointStateSub.get_jointAngle_data()
 
+            quaternion = self.quaternionSub.get_Imu_data()
+            angular_velocity = self.angularVSub.get_Imu_data()
+            linear_acceleration = self.linearASub.get_Imu_data()
+            if quaternion is None or angular_velocity is None or linear_acceleration is None:
+                print("Error: IMU data is None")
+                continue
+
+            low_state = unitree_go_msg_dds__LowState_()
+            low_state.head[0] = 0x00
+            low_state.head[1] = 0x00
+            low_state.level_flag = 0x00
+            
+            low_state.imu_state.quaternion = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
+            low_state.imu_state.gyroscope = [angular_velocity.x, angular_velocity.y, angular_velocity.z]
+            low_state.imu_state.accelerometer = [linear_acceleration.x, linear_acceleration.y, linear_acceleration.z]
+
+            for i in range(12):
+                low_state.motor_state[i].q = joint_dof_pos[i]
+                low_state.motor_state[i].dq = joint_dof_vel[i]
+                low_state.motor_state[i].tau_est = 0.0
+
+            # low_state.bms_state.crc = crc.Crc(low_state)
+            self.dds_handler.pub.Write(low_state)       
+
+
+    def reset(self):
+        self.is_running = False
+        joint_state_msg = JointState()
+        joint_state_msg.name = [
+            'flh', 'frh', 'rlh', 'rrh',   # Hips
+            'flu', 'fru', 'rlu', 'rru',  # Upper legs
+            'fld', 'frd', 'rld', 'rrd'   # Lower legs
+        ]
+        joint_state_msg.position = []
         self.jointStatePub.publisher.publish(joint_state_msg)
+
+        pid_gain_msg = Float32MultiArray()
+        pid_gain_msg.data = [0.0, 0.0]
         self.pidGainPub.publisher.publish(pid_gain_msg)
 
+    def stop(self):
+        self.is_running = False
+        if self.low_cmd2topic_thread.is_alive():
+            self.low_cmd2topic_thread.join()
+        if self.topic2low_state_thread.is_alive():
+            self.topic2low_state_thread.join()
+
+        self.low_cmd2topic_thread = threading.Thread(target=self.low_cmd2topic)
+        self.topic2low_state_thread = threading.Thread(target=self.topic2low_state)
+
+    def run_low_cmd2topic(self):
+        self.is_running = True
+        self.low_cmd2topic_thread.start()
+        self.update_low_cmd_thread.start()
+
+    def run_topic2low_state(self):
+        self.is_running = True
+        self.topic2low_state_thread.start()
+
+    def update_low_cmd(self):
+        while self.is_running:
+            self.joint_state_msg = self.dds_handler.joint_state_msg
+            self.pid_gain_msg = self.dds_handler.pid_gain_msg
+
+    def low_cmd2topic(self):
+        while self.is_running:
+            st_time = time.perf_counter()
+            # joint_state_msg = self.dds_handler.joint_state_msg
+            # pid_gain_msg = self.dds_handler.pid_gain_msg
+            time.sleep(self.delay)
+            self.jointStatePub.publisher.publish(self.joint_state_msg)
+            self.pidGainPub.publisher.publish(self.pid_gain_msg)
+            # print(f"Running frequency of topic2low_cmd: {1 / (time.perf_counter() - st_time):.2f} Hz")  
+            # runing_hz = 1 / (time.perf_counter() - st_time)
+
+            # if runing_hz > self.run_low_cmd2topic_frequency:
+            #     time.sleep(1 / self.run_low_cmd2topic_frequency - (time.perf_counter() - st_time))
+  
 
     def topic2low_state(self):
-        joint_dof_pos, joint_dof_vel = self.jointStateSub.get_jointAngle_data()
+        while self.is_running:
+            # st_time = time.perf_counter()
+            joint_dof_pos, joint_dof_vel = self.jointStateSub.get_jointAngle_data()
 
-        quaternion = self.quaternionSub.get_Imu_data()
-        angular_velocity = self.angularVSub.get_Imu_data()
-        linear_acceleration = self.linearASub.get_Imu_data()
-        if quaternion is None or angular_velocity is None or linear_acceleration is None:
-            print("Error: IMU data is None")
-            return -1
+            quaternion = self.quaternionSub.get_Imu_data()
+            angular_velocity = self.angularVSub.get_Imu_data()
+            linear_acceleration = self.linearASub.get_Imu_data()
+            if quaternion is None or angular_velocity is None or linear_acceleration is None:
+                print("Error: IMU data is None")
+                return -1
 
-        low_state = unitree_go_msg_dds__LowState_()
-        low_state.head[0] = 0x00
-        low_state.head[1] = 0x00
-        low_state.level_flag = 0x00
-        
-        low_state.imu_state.quaternion = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
-        low_state.imu_state.gyroscope = [angular_velocity.x, angular_velocity.y, angular_velocity.z]
-        low_state.imu_state.accelerometer = [linear_acceleration.x, linear_acceleration.y, linear_acceleration.z]
+            low_state = unitree_go_msg_dds__LowState_()
+            low_state.head[0] = 0x00
+            low_state.head[1] = 0x00
+            low_state.level_flag = 0x00
+            
+            low_state.imu_state.quaternion = [quaternion.w, quaternion.x, quaternion.y, quaternion.z]
+            low_state.imu_state.gyroscope = [angular_velocity.x, angular_velocity.y, angular_velocity.z]
+            low_state.imu_state.accelerometer = [linear_acceleration.x, linear_acceleration.y, linear_acceleration.z]
 
-        for i in range(12):
-            low_state.motor_state[i].q = joint_dof_pos[i]
-            low_state.motor_state[i].dq = joint_dof_vel[i]
-            low_state.motor_state[i].tau_est = 0.0
+            for i in range(12):
+                low_state.motor_state[i].q = joint_dof_pos[i]
+                low_state.motor_state[i].dq = joint_dof_vel[i]
+                low_state.motor_state[i].tau_est = 0.0
 
-        # low_state.bms_state.crc = crc.Crc(low_state)
-        self.dds_handler.pub.Write(low_state)
+            # low_state.bms_state.crc = crc.Crc(low_state)
+            self.dds_handler.pub.Write(low_state)
+
+            # print(f"Running frequency of topic2low_state: {1 / (time.perf_counter() - st_time):.2f} Hz")
 
     def test_pub(self):
         default_joint_angles = np.array([
@@ -338,14 +431,41 @@ crc = CRC()
 def main():
     controller = Controller()
 
-    start_time = time.perf_counter()
-    now_time = time.perf_counter()
-    while (now_time - start_time) < 360:
-        now_time = time.perf_counter()
-
-        controller.low_cmd2topic()
-        controller.topic2low_state()
+    # start_time = time.perf_counter()
+    # now_time = time.perf_counter()
+    # while (now_time - start_time) < 360:
+    #     now_time = time.perf_counter()
+    
+        # controller.low_cmd2topic()
+        # controller.topic2low_state()
         # controller.test_pub()
+    # controller.run()
+
+    cmd_dict = {
+        'run': controller.run,
+        'lc2t': controller.run_low_cmd2topic,
+        't2ls': controller.run_topic2low_state,
+        'stop': controller.stop,
+        'reset': controller.reset,
+    }
+    print("Commands:  run, lc2t, t2ls, stop, reset, exit")
+    try:
+        while True:
+            cmd = input("Enter command: ").strip()
+            if cmd in cmd_dict:
+                cmd_dict[cmd]()
+            elif cmd == "exit":
+                print("Exiting...")
+                controller.is_running = False
+                break
+            else:
+                print("Unknown command. Available commands: run, lc2t, t2ls, stop, exit")
+    except KeyboardInterrupt:
+        print("Exiting...")
+        controller.is_running = False
+    except Exception as e:
+        print(f"Error: {e}")
+        traceback.print_exc()
 
 if __name__ == '__main__':
     main()
