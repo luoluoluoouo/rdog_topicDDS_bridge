@@ -216,6 +216,7 @@ class DualControlCmd:
         if kp_kd_list is None:
             kp_kd_list = [ 3, 0.1]
         
+        # print(position)
         for i, motor_list in enumerate(self.leg_motor_list):
             for j, motor in enumerate(motor_list):
                 if j in [0, 2]: 

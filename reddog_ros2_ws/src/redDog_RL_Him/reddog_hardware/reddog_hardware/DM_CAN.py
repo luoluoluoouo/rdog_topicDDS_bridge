@@ -250,7 +250,7 @@ class MotorControl:
         #     return
         packets = self.__extract_packets(data_recv)
         if not packets:
-            print("Warning: No valid packets extracted!")
+            # print("Warning: No valid packets extracted!")
             return
         for packet in packets:
             data = packet[7:15]

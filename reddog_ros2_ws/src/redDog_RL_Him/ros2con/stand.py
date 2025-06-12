@@ -292,7 +292,8 @@ def main():
 
     initial_joint_angles = real_ang2mujoco_ang(initial_joint_angles)
     default_joint_angles = real_ang2mujoco_ang(default_joint_angles)
-    command_joint_angles = real_ang2mujoco_ang(command_joint_angles)
+    # command_joint_angles = real_ang2mujoco_ang(command_joint_angles)
+    command_joint_angles = [0.0, 1.6, -2.99, -0.0, 1.6, -2.99, -0.0, -1.6, 2.99, 0.7, -0.1, 0.1]
 
     # for i in range(12):
     #     cmd.motor_cmd[i].q = initial_joint_angles[i]
@@ -303,7 +304,6 @@ def main():
 
     # cmd.crc = crc.Crc(cmd)
     # pub.Write(cmd)
-    time.sleep(3)
     print("Set to default angle")
 
     run_time = time.perf_counter()
@@ -334,7 +334,7 @@ def main():
         if (runing_time < 3.0):
             phase = np.tanh(runing_time / 2)
             for i in range(12):
-                cmd.motor_cmd[i].q = phase * command_joint_angles[i] + (1 - phase) * default_joint_angles[i]
+                cmd.motor_cmd[i].q = phase * command_joint_angles[i] + (1 - phase) * initial_joint_angles[i]
                 cmd.motor_cmd[i].kp = 10
                 cmd.motor_cmd[i].dq = 0.0
                 cmd.motor_cmd[i].kd = 0.4
@@ -343,7 +343,7 @@ def main():
             # Then stand down
             phase = np.tanh((runing_time - 3.0) / 2)
             for i in range(12):
-                cmd.motor_cmd[i].q = phase * default_joint_angles[i] + (1 - phase) * command_joint_angles[i]
+                cmd.motor_cmd[i].q = phase * initial_joint_angles[i] + (1 - phase) * command_joint_angles[i]
                 cmd.motor_cmd[i].kp = 10
                 cmd.motor_cmd[i].dq = 0.0
                 cmd.motor_cmd[i].kd = 0.4

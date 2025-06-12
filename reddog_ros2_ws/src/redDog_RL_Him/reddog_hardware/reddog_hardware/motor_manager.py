@@ -293,6 +293,8 @@ class DualControlCmd:
         if kp_kd_list is None or len(kp_kd_list) < 2:
             print("Warning: Invalid kp_kd_list provided. Using default values [3, 0.1].")
             kp_kd_list = [3, 0.1]
+
+        # print(position)
         
         for i, motor_list in enumerate(self.leg_motor_list):
             for j, motor in enumerate(motor_list):

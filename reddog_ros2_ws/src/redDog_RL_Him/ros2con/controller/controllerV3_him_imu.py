@@ -445,31 +445,58 @@ class MotorController(Node):
             # **畫圖**
             plt.figure(figsize=(14, 16))
 
-            plt.subplot(3, 2, 1)
-            for i in range(3): 
-                plt.plot(time_steps_list, [step[i] for step in ang_vel_data_list], label=f"Angular Velocity {i}")
-            plt.title("History Angular Velocity", fontsize=10, pad=10)
-            plt.xlabel("Time Step")
-            plt.legend()
+            # plt.subplot(3, 2, 1)
+            # for i in range(3): 
+            #     plt.plot(time_steps_list, [step[i] for step in ang_vel_data_list], label=f"Angular Velocity {i}")
+            # plt.title("History Angular Velocity", fontsize=10, pad=10)
+            # plt.xlabel("Time Step")
+            # plt.legend()
 
-            plt.subplot(3, 2, 2)
+            # plt.subplot(3, 2, 2)
+            # for i in range(3):
+            #     plt.plot(time_steps_list, [step[i] for step in gravity_b_list], label=f"Project Gravity {i}")
+            # plt.title("History Project Gravity", fontsize=10, pad=10)
+            # plt.xlabel("Time Step")
+            # plt.legend()
+
+            # plt.subplot(3, 2, 3)
+            # for i in range(2):
+            #     plt.plot(time_steps_list, [step[i] for step in joint_vel_list], label=f"Joint Velocity {i}")
+            # plt.title("History Joint Velocity", fontsize=10, pad=10)
+            # plt.xlabel("Time Step")
+            # plt.legend()
+
+            # plt.subplot(3, 2, 4)
+            # for i in range(2):
+            #     plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Velocity Command {i}")
+            # plt.title("History Torque Command", fontsize=10, pad=10)
+            # plt.xlabel("Time Step")
+            # plt.legend()
+            # plt.tight_layout()
+
+            plt.subplot(4, 1, 1) #action
             for i in range(3):
-                plt.plot(time_steps_list, [step[i] for step in gravity_b_list], label=f"Project Gravity {i}")
-            plt.title("History Project Gravity", fontsize=10, pad=10)
+                plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Action {i}")
+            plt.title("History Action 1-3", fontsize=10, pad=10)
             plt.xlabel("Time Step")
             plt.legend()
-
-            plt.subplot(3, 2, 3)
-            for i in range(2):
-                plt.plot(time_steps_list, [step[i] for step in joint_vel_list], label=f"Joint Velocity {i}")
-            plt.title("History Joint Velocity", fontsize=10, pad=10)
+            plt.tight_layout()
+            plt.subplot(4, 1, 2)
+            for i in range(3, 6):
+                plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Action {i}")
+            plt.title("History Action 4-6", fontsize=10, pad=10)
             plt.xlabel("Time Step")
             plt.legend()
-
-            plt.subplot(3, 2, 4)
-            for i in range(2):
-                plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Velocity Command {i}")
-            plt.title("History Torque Command", fontsize=10, pad=10)
+            plt.subplot(4, 1, 3)
+            for i in range(6, 9):
+                plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Action {i}")
+            plt.title("History Action 7-9", fontsize=10, pad=10)
+            plt.xlabel("Time Step")
+            plt.legend()
+            plt.subplot(4, 1, 4)
+            for i in range(9, 12):
+                plt.plot(time_steps_list, [step[i] for step in action_list], label=f"Action {i}")
+            plt.title("History Action 10-12", fontsize=10, pad=10)
             plt.xlabel("Time Step")
             plt.legend()
             plt.tight_layout()
